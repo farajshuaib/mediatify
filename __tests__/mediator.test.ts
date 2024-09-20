@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { CreateUserCommand } from "../example/useCases/CreateUserRequest/CreateUserCommand";
 import { CreateUserCommandResponse } from "../example/useCases/CreateUserRequest/CreateUserResponse";
 import { GetUserQuery } from "../example/useCases/GetUserRequest/GetUserQuery";
@@ -5,10 +6,10 @@ import { GetUserQueryResponse } from "../example/useCases/GetUserRequest/GetUser
 import { Mediator } from "../src/Mediator";
 
 describe("Mediator", () => {
-  let mediator: Mediator;
+  const mediator = Mediator.getInstance();
 
-  beforeAll(async () => {
-    mediator = Mediator.getInstance();
+  beforeEach(async () => {
+    
   });
 
   it("should create a user successfully", async () => {

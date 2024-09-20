@@ -1,6 +1,5 @@
 // example/main.ts
 import { Mediator } from "../src/Mediator";
-import path from "path";
 import { CreateUserCommand } from "./useCases/CreateUserRequest/CreateUserCommand";
 import { CreateUserCommandResponse } from "./useCases/CreateUserRequest/CreateUserResponse";
 import { GetUserQuery } from "./useCases/GetUserRequest/GetUserQuery";
@@ -8,6 +7,7 @@ import { GetUserQueryResponse } from "./useCases/GetUserRequest/GetUserResponse"
 
 async function main() {
   const mediator = Mediator.getInstance();
+  await mediator.registerHandlers("../example/useCases/");
 
   // Send a request
   const createUserCommandResponse = await mediator.send<

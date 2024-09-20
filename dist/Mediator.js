@@ -1,82 +1,102 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-var __generator = (this && this.__generator) || function (thisArg, body) {
-    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
-    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-    function verb(n) { return function (v) { return step([n, v]); }; }
-    function step(op) {
-        if (f) throw new TypeError("Generator is already executing.");
-        while (g && (g = 0, op[0] && (_ = 0)), _) try {
-            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-            if (y = 0, t) op = [op[0] & 2, t.value];
-            switch (op[0]) {
-                case 0: case 1: t = op; break;
-                case 4: _.label++; return { value: op[1], done: false };
-                case 5: _.label++; y = op[1]; op = [0]; continue;
-                case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                default:
-                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                    if (t[2]) _.ops.pop();
-                    _.trys.pop(); continue;
-            }
-            op = body.call(thisArg, _);
-        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
     }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Mediator = void 0;
-var Handler_1 = require("./decorators/Handler");
-var Mediator = /** @class */ (function () {
-    function Mediator() {
+require("reflect-metadata");
+const path = __importStar(require("path"));
+const glob = __importStar(require("glob"));
+const Handler_1 = require("./decorators/Handler");
+class Mediator {
+    constructor() {
         this.handlers = new Map();
-        this.pipelines = [];
     }
-    Mediator.getInstance = function () {
+    static getInstance() {
         if (!Mediator.instance) {
             Mediator.instance = new Mediator();
         }
         return Mediator.instance;
-    };
-    // Register Command or Query Handlers
-    Mediator.prototype.registerHandler = function (handlerClass, handlerInstance) {
-        var requestType = (0, Handler_1.getHandlerMetadata)(handlerClass);
-        if (!requestType) {
-            throw new Error("Cannot register handler without request type metadata: ".concat(handlerClass.name));
+    }
+    /**
+     * Register a handler for a specific request type to be handled by the mediator
+     * * all handlers should implement IRequestHandler interface
+     * * all handlers should be registered before sending a request
+     * * all handlers should be registered with the request type name
+     * @ all handlers are registered via registerHandlers method by using Handler() annotation from decorators/Handler.ts file, so you do not need to register them manually unless you want to register them manually
+     * @param requestType the request type to be handled
+     * @param handler the handler for the request type
+     */
+    registerHandler(requestType, handler) {
+        this.handlers.set(requestType, handler);
+    }
+    /**
+     *
+     * @param request the request object to be sent to the handler
+     * @returns  the response object from the handler
+     * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface so make sure to register all handlers before sending a request
+     */
+    async send(request) {
+        const requestType = request.constructor.name;
+        const handler = this.handlers.get(requestType);
+        if (!handler) {
+            throw new Error(`No handler found for request type: ${requestType} try registering the handler by using Handler() annotation`);
         }
-        this.handlers.set(requestType.name, handlerInstance);
-    };
-    Mediator.prototype.registerPipeline = function (pipeline) {
-        this.pipelines.push(pipeline);
-    };
-    Mediator.prototype.send = function (request) {
-        return __awaiter(this, void 0, void 0, function () {
-            var requestType, handler;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        requestType = request.constructor.name;
-                        handler = this.handlers.get(requestType);
-                        if (!handler) {
-                            throw new Error("No handler found for request type: ".concat(requestType, " try registering the handler by using Handler() decorator"));
-                        }
-                        return [4 /*yield*/, handler.handle(request)];
-                    case 1: return [2 /*return*/, _a.sent()];
+        return await handler.handle(request);
+    }
+    /**
+     * register all handlers from a specified directory
+     * @param {string?} handlersPath - A specified directory path you make your usecases at.
+     *    * if you did not specify the directory path, it will search for handlers from the src directory.
+  
+     * @example
+     * const mediator = Mediator.getInstance();
+     * mediator.loadHandlers("core/useCases");
+     * @returns {Promise<void>}
+     * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface or the handlers doesn't annotated with @Handler annotation so make sure to annotate the hanlders with @Handler annotation before registering them
+     */
+    async registerHandlers(handlersPath = "") {
+        // Find all .ts files in the specified directory and load them
+        const dires = path.resolve(__dirname, handlersPath);
+        const files = glob.sync("**/*.ts", { cwd: dires, absolute: true });
+        if (files.length === 0) {
+            throw new Error("No ts files found in the specified directory");
+        }
+        for (const file of files) {
+            // Dynamically import the handler module
+            const module = await Promise.resolve(`${file}`).then(s => __importStar(require(s)));
+            // Iterate through all exports to find handler classes
+            for (const exported of Object.values(module)) {
+                if (typeof exported == "function") {
+                    const requestType = (0, Handler_1.getHandlerMetadata)(exported);
+                    if (requestType) {
+                        const HandlerClass = exported;
+                        const handlerInstance = new HandlerClass();
+                        this.registerHandler(requestType.name, handlerInstance);
+                    }
                 }
-            });
-        });
-    };
-    return Mediator;
-}());
+            }
+        }
+    }
+}
 exports.Mediator = Mediator;

@@ -5,7 +5,7 @@ import { GetUserQueryResponse } from "./GetUserResponse";
 
 
 // Handler
-@Handler()
+@Handler(GetUserQuery)
 export class GetUserQueryHandler implements IRequestHandler<GetUserQuery, GetUserQueryResponse> {
   async handle(request: GetUserQuery): Promise<GetUserQueryResponse> {
     return new GetUserQueryResponse(`Fetching user with id: ${request.userId}`);
