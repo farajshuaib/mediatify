@@ -9,6 +9,7 @@ describe("Mediator", () => {
   const mediator = Mediator.getInstance();
 
   beforeEach(async () => {
+    await mediator.registerHandlers("../example/useCases/");
     
   });
 
