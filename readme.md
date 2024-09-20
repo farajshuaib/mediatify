@@ -48,16 +48,10 @@ This `CreateUserCommand` will be used to create a new user, and the `CreateUserC
 #### Step 2: Define the Command Handler
 
 ```ts
-// handlers/CreateUserCommandHandler.ts
-import { IRequestHandler } from 'mediator.ts';
-import { CreateUserCommand, CreateUserResponse } from '../requests/CreateUserCommand';
-
+// ore/useCase/createUser/CreateUserCommandHandler.ts
 export class CreateUserCommandHandler implements IRequestHandler<CreateUserCommand, CreateUserCommandResponse> {
-    private httpClient: AxiosInstance;
 
-    constructor() {
-        this.httpClient = useHttpClient();
-    }
+    constructor(@Inject(HttpClient) private httpClient: HttpClient) {}
 
     async handle(request: CreateUserCommand): Promise<CreateUserCommandResponse> {
         // Simulate user creation logic
@@ -100,7 +94,7 @@ async function main() {
 
 
   // Send a request
-  const request = new CreateUserCommand("faraj", "faraj.shuaip97@gmail.com");
+  const request = new CreateUserCommand("faraj", "farajshuaib@gmail.com");
 
   const createUserCommandResponse = await mediator.send<CreateUserCommand,CreateUserCommandResponse>(request);
   

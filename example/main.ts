@@ -17,7 +17,7 @@ async function main() {
   const createUserCommandResponse = await mediator.send<
     CreateUserCommand,
     CreateUserCommandResponse
-  >(new CreateUserCommand("faraj", "faraj.shuaip97@gmail.com"));
+  >(new CreateUserCommand("faraj", "farajshuaib@gmail.com"));
   const getUserQueryResponse = await mediator.send<
     GetUserQuery,
     GetUserQueryResponse
