@@ -5,8 +5,10 @@ import * as path from "path";
 import * as glob from "glob";
 import { getHandlerMetadata } from "./decorators/Handler";
 import { HandlerConstructor } from "./interfaces/HandlerConstructor";
+import { IPipeline } from "./interfaces/IPipeline";
 export class Mediator {
   private handlers: Map<string, IRequestHandler<any, any>> = new Map();
+  private pipelines: Array<IPipeline<any, any>> = [];
 
   // Singleton instance
   private static instance: Mediator;
@@ -37,6 +39,16 @@ export class Mediator {
   }
 
   /**
+   * Register a pipeline to be executed before the handler
+   * @param pipeline the pipeline to be executed
+   */
+  registerPipeline<TRequest, TResponse>(
+    pipeline: IPipeline<TRequest, TResponse>
+  ) {
+    this.pipelines.push(pipeline);
+  }
+
+  /**
    *
    * @param request the request object to be sent to the handler
    * @returns  the response object from the handler
@@ -46,7 +58,9 @@ export class Mediator {
     request: TRequest
   ): Promise<TResponse> {
     const requestType = request.constructor.name;
-    const handler = this.handlers.get(requestType);
+
+    const handler: IRequestHandler<TRequest, TResponse> | undefined =
+      this.handlers.get(requestType);
 
     if (!handler) {
       throw new Error(
@@ -54,7 +68,16 @@ export class Mediator {
       );
     }
 
-    return await handler.handle(request);
+    const next = () => handler.handle(request);
+
+    // Execute pipelines in sequence
+    let result = next;
+    this.pipelines.reverse().forEach((pipeline) => {
+      const current = result;
+      result = () => pipeline.process(request, current);
+    });
+
+    return await result();
   }
 
   /**

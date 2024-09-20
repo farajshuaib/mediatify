@@ -35,7 +35,7 @@ describe("Mediator", () => {
   it("should throw an error if no handler is found for the request type", async () => {
     try {
       await mediator.send<CreateUserCommand, CreateUserCommandResponse>(
-        new CreateUserCommand("faraj", "")
+        new CreateUserCommand("faraj", "farajshuaib@gmail.com")
       );
     } catch (error: any) {
       expect(error).toBe(
