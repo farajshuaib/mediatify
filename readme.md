@@ -1,4 +1,4 @@
-# Mediator.ts
+# mediatify
 
 A lightweight mediator implementation for TypeScript, inspired by ASP.NET Core MediatR, following the Command Query Responsibility Segregation (CQRS) pattern. This package helps to decouple request dispatching from request handling, allowing for better separation of concerns.
 
@@ -15,11 +15,11 @@ A lightweight mediator implementation for TypeScript, inspired by ASP.NET Core M
 You can install the package via npm:
 
 ```bash
-npm install mediator.ts
+npm install mediatify
 ```
 
 ```bash
-yarn add mediator.ts
+yarn add mediatify
 ```
 
 ## Usage

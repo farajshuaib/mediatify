@@ -31,6 +31,7 @@ const Handler_1 = require("./decorators/Handler");
 class Mediator {
     constructor() {
         this.handlers = new Map();
+        this.pipelines = [];
     }
     static getInstance() {
         if (!Mediator.instance) {
@@ -51,6 +52,13 @@ class Mediator {
         this.handlers.set(requestType, handler);
     }
     /**
+     * Register a pipeline to be executed before the handler
+     * @param pipeline the pipeline to be executed
+     */
+    registerPipeline(pipeline) {
+        this.pipelines.push(pipeline);
+    }
+    /**
      *
      * @param request the request object to be sent to the handler
      * @returns  the response object from the handler
@@ -62,7 +70,14 @@ class Mediator {
         if (!handler) {
             throw new Error(`No handler found for request type: ${requestType} try registering the handler by using Handler() annotation`);
         }
-        return await handler.handle(request);
+        const next = () => handler.handle(request);
+        // Execute pipelines in sequence
+        let result = next;
+        this.pipelines.reverse().forEach((pipeline) => {
+            const current = result;
+            result = () => pipeline.process(request, current);
+        });
+        return await result();
     }
     /**
      * register all handlers from a specified directory

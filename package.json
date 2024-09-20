@@ -1,5 +1,5 @@
 {
-  "name": "mediator.ts",
+  "name": "mediatify",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,10 +20,10 @@
     "build": "tsc",
     "test": "jest"
   },
-  "homepage": "https://github.com/farajshuaib/mediator.ts",
+  "homepage": "https://github.com/farajshuaib/mediatify",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/farajshuaib/mediator.ts.git"
+    "url": "git+https://github.com/farajshuaib/mediatify.git"
   },
   "author": "Faraj Shuaib",
   "devDependencies": {
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "glob": "^11.0.0",
-    "mediator.ts": "file:",
+    "mediatify": "file:",
     "reflect-metadata": "^0.2.2",
     "ts-node": "^10.9.2"
   }

@@ -1,8 +1,10 @@
 import "reflect-metadata";
 import { IRequestHandler } from "./interfaces/IHandler";
 import { IRequest } from "./interfaces/IRequest";
+import { IPipeline } from "./interfaces/IPipeline";
 export declare class Mediator {
     private handlers;
+    private pipelines;
     private static instance;
     private constructor();
     static getInstance(): Mediator;
@@ -16,6 +18,11 @@ export declare class Mediator {
      * @param handler the handler for the request type
      */
     registerHandler<TRequest extends IRequest<TResponse>, TResponse>(requestType: string, handler: IRequestHandler<TRequest, TResponse>): void;
+    /**
+     * Register a pipeline to be executed before the handler
+     * @param pipeline the pipeline to be executed
+     */
+    registerPipeline<TRequest, TResponse>(pipeline: IPipeline<TRequest, TResponse>): void;
     /**
      *
      * @param request the request object to be sent to the handler
