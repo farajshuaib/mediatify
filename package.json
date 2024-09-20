@@ -1,0 +1,32 @@
+{
+  "name": "mediator.ts",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "private": false,
+  "keywords": [
+    "dependency-injection",
+    "typescript",
+    "mediator"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "homepage": "https://github.com/farajshuaib/mediator.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farajshuaib/mediator.ts.git"
+  },
+  "author": "Faraj Shuaib",
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "mediator.ts": "file:",
+    "reflect-metadata": "^0.2.2"
+  }
+}
