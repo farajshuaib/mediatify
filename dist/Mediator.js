@@ -115,14 +115,16 @@ class Mediator {
         const handlerFactory = (_a = options.handlerFactory) !== null && _a !== void 0 ? _a : ((HandlerClass) => new HandlerClass());
         const duplicateBehavior = (_b = options.onDuplicate) !== null && _b !== void 0 ? _b : "replace";
         for (const file of files) {
-            const module = await Promise.resolve(`${file}`).then((s) => __importStar(require(s)));
+            const module = await Promise.resolve(`${file}`).then(s => __importStar(require(s)));
             for (const exported of Object.values(module)) {
                 if (typeof exported === "function") {
                     const requestType = (0, Handler_1.getHandlerMetadata)(exported);
                     if (requestType) {
                         const HandlerClass = exported;
                         const handlerInstance = await Promise.resolve(handlerFactory(HandlerClass));
-                        if (!handlerInstance || typeof handlerInstance.handle !== "function") {
+                        if (!handlerInstance ||
+                            typeof handlerInstance.handle !==
+                                "function") {
                             throw new Error(`Handler ${HandlerClass.name} does not implement IRequestHandler interface`);
                         }
                         if (this.shouldRegisterHandler(requestType.name, duplicateBehavior)) {
