@@ -5,9 +5,10 @@ A lightweight mediator implementation for TypeScript, inspired by ASP.NET Core M
 ## Features
 
 - CQRS pattern: Supports Commands and Queries in a single `IRequest` interface.
-- Handler Registration: Handlers are automatically registered by scanning project directories for annotated classes.
+- Handler Registration: Handlers are automatically registered by scanning project directories for annotated classes (supports `.ts`, `.js`, `.mjs`, `.cjs` out of the box).
 - Pipeline Behavior: Supports pipeline behaviors (like logging, validation, etc.) that can be applied around requests.
 - Singleton Mediator: A singleton mediator ensures all handlers are registered once and reused throughout the app.
+- Testing Friendly: The mediator can now be reset between tests so you can control which handlers are available per test case.
 - Asynchronous Support: Fully supports async/await for request handling and pipeline behaviors.
 
 ## Installation
@@ -69,7 +70,7 @@ Pipelines allow you to run custom logic before or after a request is handled:
 
 ```ts
 // pipelines/LoggingPipeline.ts
-import { IPipeline } from 'mediator.ts';
+import { IPipeline } from "mediatify";
 
 export class LoggingPipeline<TRequest, TResponse> implements IPipeline<TRequest, TResponse> {
   async process(request: TRequest, next: () => Promise<TResponse>): Promise<TResponse> {
@@ -111,17 +112,42 @@ async function main() {
 
 #### Methods
 
+- `reset()` Resets the registered handlers and pipelines. Helpful inside unit tests.
 - `registerHandler(requestType: string, handler: IRequestHandler)`    Registers a handler for a specific request type.
 - `registerPipeline(pipeline: IPipeline)` Registers a pipeline behavior to be applied to all requests.
 - `send<TRequest extends IRequest<TResponse>, TResponse>(request: TRequest): Promise<TResponse>` Sends a request and invokes the corresponding handler, passing through the pipeline behaviors if registered.
+- `registerHandlers(pathOrOptions?: string | RegisterHandlersOptions, options?: RegisterHandlersOptions)` Scans a directory for annotated handlers and registers them automatically.
+
+#### `registerHandlers` Options
+
+`registerHandlers` can accept either a directory path or an options object (or both).  
+The available options are:
+
+| Option | Description |
+| --- | --- |
+| `baseDir` | Overrides the base directory used to resolve a relative handlers path (defaults to `process.cwd()` with a fallback to the package directory). |
+| `pattern` | Custom glob pattern for handler discovery. If omitted the mediator looks for `.ts`, `.js`, `.mjs` and `.cjs` files. |
+| `extensions` | Explicit list of extensions that should be scanned. |
+| `ignore` | Glob patterns that should be ignored while scanning. |
+| `handlerFactory` | Function that receives the handler constructor and returns an instance. Useful for wiring your own dependency injection container. |
+| `onDuplicate` | How to behave when the same request type is discovered twice. Accepts `"replace"` (default), `"skip"` or `"error"`. |
+
+```ts
+const mediator = Mediator.getInstance();
+await mediator.registerHandlers("./build/useCases", {
+  baseDir: __dirname,
+  onDuplicate: "skip",
+  handlerFactory: (HandlerClass) => container.resolve(HandlerClass),
+});
+```
 
 ### Annotations
 
-Handlers are registered automatically by scanning the project files using the `@Handler` decorator.
+Handlers are registered automatically by scanning the project files using the `@Handler` decorator. Both TypeScript source files and already-compiled JavaScript files will be discovered by default.
 
 ### Pipeline
 
-A pipeline is a function that processes a request before and/or after the handler is invoked.
+A pipeline is a function that processes a request before and/or after the handler is invoked. Pipelines are executed in the order they are registered and can now safely be reused across requests without worrying about registration order being mutated.
 
 ```ts
 interface IPipeline<TRequest, TResponse> {
