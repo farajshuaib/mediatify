@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { IRequestHandler } from "./interfaces/IHandler";
 import { IRequest } from "./interfaces/IRequest";
 import { IPipeline } from "./interfaces/IPipeline";
+import { RegisterHandlersOptions } from "./interfaces/RegisterHandlersOptions";
 export declare class Mediator {
     private handlers;
     private pipelines;
@@ -24,6 +25,11 @@ export declare class Mediator {
      */
     registerPipeline<TRequest, TResponse>(pipeline: IPipeline<TRequest, TResponse>): void;
     /**
+     * Reset handlers and pipelines.
+     * Mostly useful for testing scenarios.
+     */
+    reset(): void;
+    /**
      *
      * @param request the request object to be sent to the handler
      * @returns  the response object from the handler
@@ -41,5 +47,10 @@ export declare class Mediator {
      * @returns {Promise<void>}
      * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface or the handlers doesn't annotated with @Handler annotation so make sure to annotate the hanlders with @Handler annotation before registering them
      */
-    registerHandlers(handlersPath?: string): Promise<void>;
+    registerHandlers(handlersPathOrOptions?: string | RegisterHandlersOptions, maybeOptions?: RegisterHandlersOptions): Promise<void>;
+    private normalizeHandlerArgs;
+    private resolveDirectories;
+    private findHandlerFiles;
+    private buildExtensions;
+    private shouldRegisterHandler;
 }
