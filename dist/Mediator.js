@@ -29,9 +29,11 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const glob = __importStar(require("glob"));
 const Handler_1 = require("./decorators/Handler");
+const errors_1 = require("./errors");
 class Mediator {
     constructor() {
         this.handlers = new Map();
+        this.notificationHandlers = new Map();
         this.pipelines = [];
     }
     static getInstance() {
@@ -53,6 +55,22 @@ class Mediator {
         this.handlers.set(requestType, handler);
     }
     /**
+     * Register a handler for a specific notification type. Unlike requests,
+     * a notification may have any number of handlers; duplicates of the same
+     * handler class are ignored so repeated scans stay idempotent.
+     * @param notificationType the notification type to react to
+     * @param handler the handler to invoke when the notification is published
+     */
+    registerNotificationHandler(notificationType, handler) {
+        var _a;
+        const handlers = (_a = this.notificationHandlers.get(notificationType)) !== null && _a !== void 0 ? _a : [];
+        const alreadyRegistered = handlers.some((existing) => existing.constructor === handler.constructor);
+        if (!alreadyRegistered) {
+            handlers.push(handler);
+        }
+        this.notificationHandlers.set(notificationType, handlers);
+    }
+    /**
      * Register a pipeline to be executed before the handler
      * @param pipeline the pipeline to be executed
      */
@@ -60,24 +78,44 @@ class Mediator {
         this.pipelines.push(pipeline);
     }
     /**
-     * Reset handlers and pipelines.
+     * Returns true when a handler is registered for the given request type.
+     */
+    hasHandler(requestType) {
+        return this.handlers.has(requestType);
+    }
+    /**
+     * Removes the handler registered for the given request type.
+     * @returns true if a handler existed and was removed
+     */
+    unregisterHandler(requestType) {
+        return this.handlers.delete(requestType);
+    }
+    /**
+     * Removes all registered pipelines while keeping handlers intact.
+     */
+    clearPipelines() {
+        this.pipelines.length = 0;
+    }
+    /**
+     * Reset handlers, notification handlers and pipelines.
      * Mostly useful for testing scenarios.
      */
     reset() {
         this.handlers.clear();
+        this.notificationHandlers.clear();
         this.pipelines.length = 0;
     }
     /**
      *
      * @param request the request object to be sent to the handler
      * @returns  the response object from the handler
-     * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface so make sure to register all handlers before sending a request
+     * @throws HandlerNotFoundError if no handler is registered for the request type, so make sure to register all handlers before sending a request
      */
     async send(request) {
         const requestType = request.constructor.name;
         const handler = this.handlers.get(requestType);
         if (!handler) {
-            throw new Error(`No handler found for request type: ${requestType} try registering the handler by using Handler() annotation`);
+            throw new errors_1.HandlerNotFoundError(requestType);
         }
         const next = () => handler.handle(request);
         // Execute pipelines in the order they were registered without mutating the original array
@@ -91,6 +129,19 @@ class Mediator {
         return await invoke();
     }
     /**
+     * Publish a notification to every handler registered for its type.
+     * Handlers run concurrently; if any handler rejects, the returned promise
+     * rejects. Publishing a notification with no handlers is a no-op.
+     * @param notification the notification object to dispatch
+     */
+    async publish(notification) {
+        var _a;
+        const notificationType = notification
+            .constructor.name;
+        const handlers = (_a = this.notificationHandlers.get(notificationType)) !== null && _a !== void 0 ? _a : [];
+        await Promise.all(handlers.map((handler) => handler.handle(notification)));
+    }
+    /**
      * register all handlers from a specified directory
      * @param {string?} handlersPath - A specified directory path you make your usecases at.
      *    * if you did not specify the directory path, it will search for handlers from the src directory.
@@ -99,38 +150,45 @@ class Mediator {
      * const mediator = Mediator.getInstance();
      * mediator.loadHandlers("core/useCases");
      * @returns {Promise<void>}
-     * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface or the handlers doesn't annotated with @Handler annotation so make sure to annotate the hanlders with @Handler annotation before registering them
+     * @throws HandlersDirectoryNotFoundError, NoHandlerFilesFoundError, InvalidHandlerError or DuplicateHandlerError. Make sure handlers are annotated with @Handler (or @NotificationHandler) before registering them.
      */
     async registerHandlers(handlersPathOrOptions = "", maybeOptions = {}) {
         var _a, _b;
         const { handlersPath, options } = this.normalizeHandlerArgs(handlersPathOrOptions, maybeOptions);
         const directories = this.resolveDirectories(handlersPath, options);
         if (!directories.length) {
-            throw new Error(`Unable to resolve handlers directory using path "${handlersPath}".`);
+            throw new errors_1.HandlersDirectoryNotFoundError(handlersPath);
         }
         const files = this.findHandlerFiles(directories, options);
         if (!files.length) {
-            throw new Error("No handler files found in the specified directory");
+            throw new errors_1.NoHandlerFilesFoundError();
         }
         const handlerFactory = (_a = options.handlerFactory) !== null && _a !== void 0 ? _a : ((HandlerClass) => new HandlerClass());
         const duplicateBehavior = (_b = options.onDuplicate) !== null && _b !== void 0 ? _b : "replace";
         for (const file of files) {
             const module = await Promise.resolve(`${file}`).then(s => __importStar(require(s)));
             for (const exported of Object.values(module)) {
-                if (typeof exported === "function") {
-                    const requestType = (0, Handler_1.getHandlerMetadata)(exported);
-                    if (requestType) {
-                        const HandlerClass = exported;
-                        const handlerInstance = await Promise.resolve(handlerFactory(HandlerClass));
-                        if (!handlerInstance ||
-                            typeof handlerInstance.handle !==
-                                "function") {
-                            throw new Error(`Handler ${HandlerClass.name} does not implement IRequestHandler interface`);
-                        }
-                        if (this.shouldRegisterHandler(requestType.name, duplicateBehavior)) {
-                            this.registerHandler(requestType.name, handlerInstance);
-                        }
-                    }
+                if (typeof exported !== "function") {
+                    continue;
+                }
+                const requestType = (0, Handler_1.getHandlerMetadata)(exported);
+                const notificationType = (0, Handler_1.getNotificationHandlerMetadata)(exported);
+                if (!requestType && !notificationType) {
+                    continue;
+                }
+                const HandlerClass = exported;
+                const handlerInstance = await Promise.resolve(handlerFactory(HandlerClass));
+                if (!handlerInstance ||
+                    typeof handlerInstance.handle !==
+                        "function") {
+                    throw new errors_1.InvalidHandlerError(HandlerClass.name);
+                }
+                if (requestType &&
+                    this.shouldRegisterHandler(requestType.name, duplicateBehavior)) {
+                    this.registerHandler(requestType.name, handlerInstance);
+                }
+                if (notificationType) {
+                    this.registerNotificationHandler(notificationType.name, handlerInstance);
                 }
             }
         }
@@ -208,7 +266,7 @@ class Mediator {
         if (duplicateBehavior === "skip") {
             return false;
         }
-        throw new Error(`Handler for request type "${requestType}" is already registered`);
+        throw new errors_1.DuplicateHandlerError(requestType);
     }
 }
 exports.Mediator = Mediator;

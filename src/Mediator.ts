@@ -4,16 +4,30 @@ import * as path from "path";
 import * as glob from "glob";
 import { IRequestHandler } from "./interfaces/IHandler";
 import { IRequest } from "./interfaces/IRequest";
-import { getHandlerMetadata } from "./decorators/Handler";
+import { INotification } from "./interfaces/INotification";
+import { INotificationHandler } from "./interfaces/INotificationHandler";
+import {
+  getHandlerMetadata,
+  getNotificationHandlerMetadata,
+} from "./decorators/Handler";
 import { HandlerConstructor } from "./interfaces/HandlerConstructor";
 import { IPipeline } from "./interfaces/IPipeline";
 import {
   DuplicateHandlerBehavior,
   RegisterHandlersOptions,
 } from "./interfaces/RegisterHandlersOptions";
+import {
+  DuplicateHandlerError,
+  HandlerNotFoundError,
+  HandlersDirectoryNotFoundError,
+  InvalidHandlerError,
+  NoHandlerFilesFoundError,
+} from "./errors";
 
 export class Mediator {
   private handlers: Map<string, IRequestHandler<any, any>> = new Map();
+  private notificationHandlers: Map<string, INotificationHandler<any>[]> =
+    new Map();
   private pipelines: Array<IPipeline<any, any>> = [];
 
   // Singleton instance
@@ -45,6 +59,29 @@ export class Mediator {
   }
 
   /**
+   * Register a handler for a specific notification type. Unlike requests,
+   * a notification may have any number of handlers; duplicates of the same
+   * handler class are ignored so repeated scans stay idempotent.
+   * @param notificationType the notification type to react to
+   * @param handler the handler to invoke when the notification is published
+   */
+  public registerNotificationHandler<TNotification extends INotification>(
+    notificationType: string,
+    handler: INotificationHandler<TNotification>
+  ): void {
+    const handlers = this.notificationHandlers.get(notificationType) ?? [];
+    const alreadyRegistered = handlers.some(
+      (existing) => existing.constructor === handler.constructor
+    );
+
+    if (!alreadyRegistered) {
+      handlers.push(handler);
+    }
+
+    this.notificationHandlers.set(notificationType, handlers);
+  }
+
+  /**
    * Register a pipeline to be executed before the handler
    * @param pipeline the pipeline to be executed
    */
@@ -55,11 +92,34 @@ export class Mediator {
   }
 
   /**
-   * Reset handlers and pipelines.
+   * Returns true when a handler is registered for the given request type.
+   */
+  public hasHandler(requestType: string): boolean {
+    return this.handlers.has(requestType);
+  }
+
+  /**
+   * Removes the handler registered for the given request type.
+   * @returns true if a handler existed and was removed
+   */
+  public unregisterHandler(requestType: string): boolean {
+    return this.handlers.delete(requestType);
+  }
+
+  /**
+   * Removes all registered pipelines while keeping handlers intact.
+   */
+  public clearPipelines(): void {
+    this.pipelines.length = 0;
+  }
+
+  /**
+   * Reset handlers, notification handlers and pipelines.
    * Mostly useful for testing scenarios.
    */
   public reset(): void {
     this.handlers.clear();
+    this.notificationHandlers.clear();
     this.pipelines.length = 0;
   }
 
@@ -67,7 +127,7 @@ export class Mediator {
    *
    * @param request the request object to be sent to the handler
    * @returns  the response object from the handler
-   * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface so make sure to register all handlers before sending a request
+   * @throws HandlerNotFoundError if no handler is registered for the request type, so make sure to register all handlers before sending a request
    */
   public async send<TRequest extends IRequest<TResponse>, TResponse>(
     request: TRequest
@@ -78,9 +138,7 @@ export class Mediator {
       this.handlers.get(requestType);
 
     if (!handler) {
-      throw new Error(
-        `No handler found for request type: ${requestType} try registering the handler by using Handler() annotation`
-      );
+      throw new HandlerNotFoundError(requestType);
     }
 
     const next = () => handler.handle(request);
@@ -98,6 +156,23 @@ export class Mediator {
   }
 
   /**
+   * Publish a notification to every handler registered for its type.
+   * Handlers run concurrently; if any handler rejects, the returned promise
+   * rejects. Publishing a notification with no handlers is a no-op.
+   * @param notification the notification object to dispatch
+   */
+  public async publish<TNotification extends INotification>(
+    notification: TNotification
+  ): Promise<void> {
+    const notificationType = (notification as { constructor: Function })
+      .constructor.name;
+
+    const handlers = this.notificationHandlers.get(notificationType) ?? [];
+
+    await Promise.all(handlers.map((handler) => handler.handle(notification)));
+  }
+
+  /**
    * register all handlers from a specified directory
    * @param {string?} handlersPath - A specified directory path you make your usecases at.
    *    * if you did not specify the directory path, it will search for handlers from the src directory.
@@ -106,7 +181,7 @@ export class Mediator {
    * const mediator = Mediator.getInstance();
    * mediator.loadHandlers("core/useCases");
    * @returns {Promise<void>}
-   * @throws an error if no handler is found for the request type or if the handler does not implement IRequestHandler interface or the handlers doesn't annotated with @Handler annotation so make sure to annotate the hanlders with @Handler annotation before registering them
+   * @throws HandlersDirectoryNotFoundError, NoHandlerFilesFoundError, InvalidHandlerError or DuplicateHandlerError. Make sure handlers are annotated with @Handler (or @NotificationHandler) before registering them.
    */
   public async registerHandlers(
     handlersPathOrOptions: string | RegisterHandlersOptions = "",
@@ -119,15 +194,13 @@ export class Mediator {
     const directories = this.resolveDirectories(handlersPath, options);
 
     if (!directories.length) {
-      throw new Error(
-        `Unable to resolve handlers directory using path "${handlersPath}".`
-      );
+      throw new HandlersDirectoryNotFoundError(handlersPath);
     }
 
     const files = this.findHandlerFiles(directories, options);
 
     if (!files.length) {
-      throw new Error("No handler files found in the specified directory");
+      throw new NoHandlerFilesFoundError();
     }
 
     const handlerFactory =
@@ -140,33 +213,44 @@ export class Mediator {
       const module = await import(file);
 
       for (const exported of Object.values(module)) {
-        if (typeof exported === "function") {
-          const requestType = getHandlerMetadata(exported);
+        if (typeof exported !== "function") {
+          continue;
+        }
 
-          if (requestType) {
-            const HandlerClass = exported as HandlerConstructor<
-              IRequestHandler<any, any>
-            >;
-            const handlerInstance = await Promise.resolve(
-              handlerFactory(HandlerClass)
-            );
+        const requestType = getHandlerMetadata(exported);
+        const notificationType = getNotificationHandlerMetadata(exported);
 
-            if (
-              !handlerInstance ||
-              typeof (handlerInstance as IRequestHandler<any, any>).handle !==
-                "function"
-            ) {
-              throw new Error(
-                `Handler ${HandlerClass.name} does not implement IRequestHandler interface`
-              );
-            }
+        if (!requestType && !notificationType) {
+          continue;
+        }
 
-            if (
-              this.shouldRegisterHandler(requestType.name, duplicateBehavior)
-            ) {
-              this.registerHandler(requestType.name, handlerInstance);
-            }
-          }
+        const HandlerClass = exported as HandlerConstructor<
+          IRequestHandler<any, any>
+        >;
+        const handlerInstance = await Promise.resolve(
+          handlerFactory(HandlerClass)
+        );
+
+        if (
+          !handlerInstance ||
+          typeof (handlerInstance as IRequestHandler<any, any>).handle !==
+            "function"
+        ) {
+          throw new InvalidHandlerError(HandlerClass.name);
+        }
+
+        if (
+          requestType &&
+          this.shouldRegisterHandler(requestType.name, duplicateBehavior)
+        ) {
+          this.registerHandler(requestType.name, handlerInstance);
+        }
+
+        if (notificationType) {
+          this.registerNotificationHandler(
+            notificationType.name,
+            handlerInstance as INotificationHandler<any>
+          );
         }
       }
     }
@@ -271,8 +355,6 @@ export class Mediator {
       return false;
     }
 
-    throw new Error(
-      `Handler for request type "${requestType}" is already registered`
-    );
+    throw new DuplicateHandlerError(requestType);
   }
 }

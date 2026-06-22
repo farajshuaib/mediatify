@@ -5,11 +5,13 @@ A lightweight mediator implementation for TypeScript, inspired by ASP.NET Core M
 ## Features
 
 - CQRS pattern: Supports Commands and Queries in a single `IRequest` interface.
+- Notifications: Publish events to many handlers at once with `@NotificationHandler` and `publish`.
 - Handler Registration: Handlers are automatically registered by scanning project directories for annotated classes (supports `.ts`, `.js`, `.mjs`, `.cjs` out of the box).
 - Pipeline Behavior: Supports pipeline behaviors (like logging, validation, etc.) that can be applied around requests.
 - Singleton Mediator: A singleton mediator ensures all handlers are registered once and reused throughout the app.
-- Testing Friendly: The mediator can now be reset between tests so you can control which handlers are available per test case.
-- Asynchronous Support: Fully supports async/await for request handling and pipeline behaviors.
+- Typed Errors: Failures throw dedicated error classes (e.g. `HandlerNotFoundError`) that all extend `MediatifyError`.
+- Testing Friendly: The mediator can be reset between tests so you can control which handlers are available per test case.
+- Asynchronous Support: Fully supports async/await for request handling, notifications, and pipeline behaviors.
 
 ## Installation
 
@@ -106,17 +108,63 @@ async function main() {
 
 ```
 
+## Notifications (publish / subscribe)
+
+Where a request has exactly one handler and returns a response, a **notification**
+is an event that can be handled by zero, one, or many handlers and returns nothing.
+Annotate handlers with `@NotificationHandler` and dispatch with `publish`:
+
+```ts
+// notifications/UserCreatedNotification.ts
+import { INotification } from "mediatify";
+
+export class UserCreatedNotification implements INotification {
+  constructor(public username: string, public email: string) {}
+}
+```
+
+```ts
+// notifications/SendWelcomeEmailHandler.ts
+import { NotificationHandler, INotificationHandler } from "mediatify";
+import { UserCreatedNotification } from "./UserCreatedNotification";
+
+@NotificationHandler(UserCreatedNotification)
+export class SendWelcomeEmailHandler
+  implements INotificationHandler<UserCreatedNotification>
+{
+  async handle(notification: UserCreatedNotification): Promise<void> {
+    await sendEmail(notification.email);
+  }
+}
+```
+
+```ts
+// Notification handlers are discovered by registerHandlers just like request handlers.
+await mediator.registerHandlers("./useCases");
+
+// Every handler registered for UserCreatedNotification runs (concurrently).
+await mediator.publish(new UserCreatedNotification("faraj", "faraj@example.com"));
+```
+
+Publishing a notification with no registered handlers is a no-op. Notifications do
+not pass through request pipelines.
+
 ## API
 
 ### Mediator Class
 
 #### Methods
 
-- `reset()` Resets the registered handlers and pipelines. Helpful inside unit tests.
-- `registerHandler(requestType: string, handler: IRequestHandler)`    Registers a handler for a specific request type.
+- `reset()` Resets the registered handlers, notification handlers and pipelines. Helpful inside unit tests.
+- `registerHandler(requestType: string, handler: IRequestHandler)` Registers a handler for a specific request type.
+- `registerNotificationHandler(notificationType: string, handler: INotificationHandler)` Registers a handler for a notification type (duplicate handler classes are ignored).
 - `registerPipeline(pipeline: IPipeline)` Registers a pipeline behavior to be applied to all requests.
+- `clearPipelines()` Removes all registered pipelines while keeping handlers intact.
+- `hasHandler(requestType: string): boolean` Returns whether a handler is registered for a request type.
+- `unregisterHandler(requestType: string): boolean` Removes the handler for a request type; returns whether one existed.
 - `send<TRequest extends IRequest<TResponse>, TResponse>(request: TRequest): Promise<TResponse>` Sends a request and invokes the corresponding handler, passing through the pipeline behaviors if registered.
-- `registerHandlers(pathOrOptions?: string | RegisterHandlersOptions, options?: RegisterHandlersOptions)` Scans a directory for annotated handlers and registers them automatically.
+- `publish<TNotification extends INotification>(notification: TNotification): Promise<void>` Publishes a notification to every registered handler.
+- `registerHandlers(pathOrOptions?: string | RegisterHandlersOptions, options?: RegisterHandlersOptions)` Scans a directory for annotated request and notification handlers and registers them automatically.
 
 #### `registerHandlers` Options
 
@@ -143,7 +191,19 @@ await mediator.registerHandlers("./build/useCases", {
 
 ### Annotations
 
-Handlers are registered automatically by scanning the project files using the `@Handler` decorator. Both TypeScript source files and already-compiled JavaScript files will be discovered by default.
+Handlers are registered automatically by scanning the project files using the `@Handler` decorator (for requests) and `@NotificationHandler` decorator (for notifications). Both TypeScript source files and already-compiled JavaScript files will be discovered by default.
+
+### Errors
+
+All errors thrown by the library extend `MediatifyError`, so you can catch them with a single `instanceof MediatifyError` check, or narrow to a specific type:
+
+| Error | Thrown when |
+| --- | --- |
+| `HandlerNotFoundError` | `send` is called with a request type that has no registered handler. |
+| `DuplicateHandlerError` | A request type is discovered twice and `onDuplicate` is `"error"`. |
+| `InvalidHandlerError` | An annotated class does not implement a `handle` method. |
+| `HandlersDirectoryNotFoundError` | `registerHandlers` cannot resolve the provided directory. |
+| `NoHandlerFilesFoundError` | The resolved directory contains no matching files. |
 
 ### Pipeline
 

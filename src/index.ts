@@ -1,0 +1,30 @@
+import "reflect-metadata";
+
+export { Mediator } from "./Mediator";
+
+export {
+  Handler,
+  NotificationHandler,
+  getHandlerMetadata,
+  getNotificationHandlerMetadata,
+} from "./decorators/Handler";
+
+export type { IRequest } from "./interfaces/IRequest";
+export type { IRequestHandler } from "./interfaces/IHandler";
+export type { IPipeline } from "./interfaces/IPipeline";
+export type { INotification } from "./interfaces/INotification";
+export type { INotificationHandler } from "./interfaces/INotificationHandler";
+export type { HandlerConstructor } from "./interfaces/HandlerConstructor";
+export type {
+  RegisterHandlersOptions,
+  DuplicateHandlerBehavior,
+} from "./interfaces/RegisterHandlersOptions";
+
+export {
+  MediatifyError,
+  HandlerNotFoundError,
+  DuplicateHandlerError,
+  InvalidHandlerError,
+  HandlersDirectoryNotFoundError,
+  NoHandlerFilesFoundError,
+} from "./errors";
